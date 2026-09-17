@@ -116,13 +116,14 @@ muse)
   [[ -n ${prompt:-} ]] && command+=(-- "$prompt")
   ;;
 phantombot)
-  # Phantombot's chat TUI has no seed-prompt flag, so a prompt runs as one
-  # headless turn first and the TUI opens on top of it; a bare launch goes
-  # straight to the TUI. It has no permission prompts of its own to skip.
+  # Bare `phantombot` is the chat TUI (`phantombot persona` is persona
+  # management). The helper owns the seed dance: a prompt runs as one headless
+  # ask threaded into the chat TUI's own conversation, then the TUI opens on
+  # top of that history. There are no permission prompts to skip.
   if [[ -n ${prompt:-} ]]; then
-    command=(bash -c 'phantombot ask --history --conversation omarchy "$1"; echo; exec phantombot persona' _ "$prompt")
+    command=(omarchy-launch-phantombot --seed "$prompt")
   else
-    command=(phantombot persona)
+    command=(phantombot)
   fi
   ;;
 omp)

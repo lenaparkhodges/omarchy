@@ -1,0 +1,29 @@
+#!/bin/bash
+
+# omarchy:summary=Seed Phantombot's chat TUI with a prompt and open it
+# omarchy:args=--seed <prompt>
+# omarchy:examples=omarchy-launch-phantombot --seed "Review this project"
+
+# Bare `phantombot` is the chat TUI (`phantombot persona` is persona
+# management), and the chat TUI has no seed-prompt flag. So the prompt runs
+# as one headless ask threaded into the conversation the TUI itself reads —
+# cli:tui:<persona> — and the TUI then opens on top of that history, ready
+# to continue the turn. The persona is resolved the same way Phantombot
+# resolves its default: env, then state, then config, then "phantom".
+
+[[ $1 == "--seed" ]] || { echo "usage: omarchy-launch-phantombot --seed <prompt>" >&2; exit 1; }
+prompt=${2:?--seed needs a value}
+
+persona=${PHANTOMBOT_DEFAULT_PERSONA:-}
+if [[ -z $persona ]]; then
+  persona=$(sed -n 's/.*"default_persona"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' \
+    "${XDG_DATA_HOME:-$HOME/.local/share}/phantombot/state.json" 2>/dev/null | head -1)
+fi
+if [[ -z $persona ]]; then
+  persona=$(sed -n 's/^default_persona[[:space:]]*=[[:space:]]*"\([^"]*\)".*/\1/p' \
+    "${XDG_CONFIG_HOME:-$HOME/.config}/phantombot/config.toml" 2>/dev/null | head -1)
+fi
+
+phantombot ask --history --conversation "cli:tui:${persona:-phantom}" "$prompt"
+echo
+exec phantombot
