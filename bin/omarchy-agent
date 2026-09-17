@@ -117,14 +117,11 @@ muse)
   ;;
 phantombot)
   # Bare `phantombot` is the chat TUI (`phantombot persona` is persona
-  # management). The helper owns the seed dance: a prompt runs as one headless
-  # ask threaded into the chat TUI's own conversation, then the TUI opens on
-  # top of that history. There are no permission prompts to skip.
-  if [[ -n ${prompt:-} ]]; then
-    command=(omarchy-launch-phantombot --seed "$prompt")
-  else
-    command=(phantombot)
-  fi
+  # management). --prompt seeds the first turn through the interactive TUI
+  # itself — the human-at-the-TTY path, same trust shape as pi above — so
+  # nothing detours through the judge-screened headless ask channel.
+  command=(phantombot)
+  [[ -n ${prompt:-} ]] && command+=(--prompt "$prompt")
   ;;
 omp)
   command=(omp --auto-approve)

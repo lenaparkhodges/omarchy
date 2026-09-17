@@ -892,72 +892,16 @@ mapfile -d '' -t launch_args <"$launch_log"
   fail "Phantombot launches its chat TUI" "argv: ${launch_args[*]}"
 omarchy-agent-prompt "Review this project"
 mapfile -d '' -t launch_args <"$launch_log"
-[[ ${launch_args[*]} == "--app-id=org.omarchy.agent omarchy-launch-phantombot --seed Review this project" ]] ||
-  fail "Phantombot hands prompts to its launch helper" "argv: ${launch_args[*]}"
-pass "Phantombot launches bare for chat and seeds prompts through its helper"
-
-# The seed helper: a prompt must land in the conversation the chat TUI itself
-# reads (cli:tui:<persona>), with the persona resolved exactly the way
-# Phantombot resolves its default — env, then state, then config, then
-# "phantom".
-cat >"$mock_bin/phantombot" <<'SH'
-#!/bin/bash
-if (( $# )); then
-  printf '%s\0' "$@" >>"$OMARCHY_TEST_PHANTOMBOT_LOG"
-else
-  printf 'phantombot\0' >>"$OMARCHY_TEST_PHANTOMBOT_LOG"
-fi
-exit 0
-SH
-chmod +x "$mock_bin/phantombot"
-pb_log="$test_tmp/phantombot-calls"
-export OMARCHY_TEST_PHANTOMBOT_LOG="$pb_log"
-
-mkdir -p "$test_home/.config/phantombot"
-printf 'default_persona = "omarchytest"\n' >"$test_home/.config/phantombot/config.toml"
-: >"$pb_log"
-omarchy-launch-phantombot --seed "Review this project"
-mapfile -d '' -t pb_args <"$pb_log"
-[[ ${pb_args[*]} == "ask --history --conversation cli:tui:omarchytest Review this project phantombot" ]] ||
-  fail "the seed ask threads into the chat TUI conversation" "argv: ${pb_args[*]}"
-pass "seed prompt threads into the chat TUI conversation and the TUI opens on top"
-
-: >"$pb_log"
-PHANTOMBOT_DEFAULT_PERSONA=envpersona omarchy-launch-phantombot --seed hi
-mapfile -d '' -t pb_args <"$pb_log"
-[[ ${pb_args[3]} == "cli:tui:envpersona" ]] ||
-  fail "seed honors the PHANTOMBOT_DEFAULT_PERSONA env override" "argv: ${pb_args[*]}"
-pass "seed persona honors the env override"
-
-mkdir -p "$test_home/.local/share/phantombot"
-printf '{"default_persona":"statepersona"}' >"$test_home/.local/share/phantombot/state.json"
-: >"$pb_log"
-omarchy-launch-phantombot --seed hi
-mapfile -d '' -t pb_args <"$pb_log"
-[[ ${pb_args[3]} == "cli:tui:statepersona" ]] ||
-  fail "seed prefers the state persona over config" "argv: ${pb_args[*]}"
-pass "seed persona prefers state.json over config.toml"
-
-# Fresh install: no persona configured anywhere, so the seed ask would fail
-# with "persona 'phantom' not found" before the TUI ever opened. The launcher
-# must skip the seed and open bare phantombot — its first-run TUI — instead.
-rm "$test_home/.local/share/phantombot/state.json" \
-  "$test_home/.config/phantombot/config.toml"
-: >"$pb_log"
-omarchy-launch-phantombot --seed hi
-mapfile -d '' -t pb_args <"$pb_log"
-[[ ${pb_args[*]} == "phantombot" ]] ||
-  fail "a fresh install opens the bare TUI instead of seeding a persona that does not exist" "argv: ${pb_args[*]}"
-pass "a fresh install skips the seed and onboards through the bare TUI"
-
-rm "$mock_bin/phantombot"
-hash -r
+[[ ${launch_args[*]} == "--app-id=org.omarchy.agent phantombot --prompt Review this project" ]] ||
+  fail "Phantombot hands prompts to its TUI" "argv: ${launch_args[*]}"
+pass "Phantombot launches bare for chat and seeds prompts through --prompt"
 
 # Contract probe against the real binary, when it happens to be installed:
 # the argv the launcher builds must match what Phantombot actually ships.
 # Bare `phantombot` is the chat TUI under a TTY and hits the usage gate when
 # unwatched, while `phantombot persona` renders persona management either
-# way — the distinction the launcher must not confuse.
+# way. The --prompt seed flag is specified in phantomyard/phantombot#575;
+# probe it here once the shipping binary supports it.
 if command -v phantombot >/dev/null; then
   bare_out=$(timeout 15 phantombot </dev/null 2>&1 || true)
   [[ $bare_out == *"No command specified"* ]] ||
@@ -965,8 +909,5 @@ if command -v phantombot >/dev/null; then
   persona_out=$(timeout 15 phantombot persona </dev/null 2>&1 || true)
   [[ $persona_out == *"Persona"* && $persona_out == *"Status"* ]] ||
     fail "phantombot persona renders persona management, not the chat TUI"
-  ask_help=$(phantombot ask --help 2>&1)
-  [[ $ask_help == *"--history"* && $ask_help == *"--conversation"* ]] ||
-    fail "phantombot ask exposes --history/--conversation for seeding"
   pass "Phantombot entrypoint contract holds on the real binary"
 fi
