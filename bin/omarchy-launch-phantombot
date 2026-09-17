@@ -10,6 +10,11 @@
 # cli:tui:<persona> — and the TUI then opens on top of that history, ready
 # to continue the turn. The persona is resolved the same way Phantombot
 # resolves its default: env, then state, then config, then "phantom".
+#
+# On a fresh install no persona exists yet. `phantombot ask` would fail
+# with "persona 'phantom' not found" before the TUI ever opens, so the seed
+# is skipped in that case: bare `phantombot` onboards cleanly instead, and
+# the first real prompt the user types lands in the TUI itself.
 
 [[ $1 == "--seed" ]] || { echo "usage: omarchy-launch-phantombot --seed <prompt>" >&2; exit 1; }
 prompt=${2:?--seed needs a value}
@@ -24,6 +29,11 @@ if [[ -z $persona ]]; then
     "${XDG_CONFIG_HOME:-$HOME/.config}/phantombot/config.toml" 2>/dev/null | head -1)
 fi
 
-phantombot ask --history --conversation "cli:tui:${persona:-phantom}" "$prompt"
+if [[ -z $persona ]]; then
+  # No configured persona anywhere — first run. Open the TUI and let it onboard.
+  exec phantombot
+fi
+
+phantombot ask --history --conversation "cli:tui:${persona}" "$prompt"
 echo
 exec phantombot

@@ -107,6 +107,11 @@ done
 chmod +x "$mock_bin"/*
 
 export HOME="$test_home"
+# The XDG vars win over HOME in the launchers, so pin them to the sandbox too
+# — a caller with XDG_DATA_HOME/XDG_CONFIG_HOME exported must not leak their
+# real phantombot state into the expectations below.
+export XDG_DATA_HOME="$test_home/.local/share"
+export XDG_CONFIG_HOME="$test_home/.config"
 export PATH="$mock_bin:$ROOT/bin:$PATH"
 export OMARCHY_TEST_NOTIFICATION_HISTORY="$notification_history"
 export OMARCHY_TEST_AGENT_OPEN_LOG="$agent_open_log"
@@ -932,6 +937,18 @@ mapfile -d '' -t pb_args <"$pb_log"
 [[ ${pb_args[3]} == "cli:tui:statepersona" ]] ||
   fail "seed prefers the state persona over config" "argv: ${pb_args[*]}"
 pass "seed persona prefers state.json over config.toml"
+
+# Fresh install: no persona configured anywhere, so the seed ask would fail
+# with "persona 'phantom' not found" before the TUI ever opened. The launcher
+# must skip the seed and open bare phantombot — its first-run TUI — instead.
+rm "$test_home/.local/share/phantombot/state.json" \
+  "$test_home/.config/phantombot/config.toml"
+: >"$pb_log"
+omarchy-launch-phantombot --seed hi
+mapfile -d '' -t pb_args <"$pb_log"
+[[ ${pb_args[*]} == "phantombot" ]] ||
+  fail "a fresh install opens the bare TUI instead of seeding a persona that does not exist" "argv: ${pb_args[*]}"
+pass "a fresh install skips the seed and onboards through the bare TUI"
 
 rm "$mock_bin/phantombot"
 hash -r
