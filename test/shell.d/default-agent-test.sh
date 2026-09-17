@@ -825,3 +825,72 @@ mapfile -d '' -t launch_args <"$launch_log"
   ${launch_args[4]} == "Review this project" ]] ||
   fail "OpenClaw receives prompts through --message" "argv: ${launch_args[*]}"
 pass "OpenClaw receives prompts through --message"
+
+# Phantombot installs through its own checksum-verified installer rather than
+# mise, so it reaches the same --check/--now contract the OpenClaw package
+# gets from omarchy-install-openclaw-cli.
+cat >"$mock_bin/omarchy-agent" <<'SH'
+#!/bin/bash
+printf '%s\0' omarchy-agent "$@" >"$OMARCHY_TEST_AGENT_OPEN_LOG"
+SH
+chmod +x "$mock_bin/omarchy-agent"
+hash -r
+
+cat >"$mock_bin/omarchy-install-phantombot" <<'SH'
+#!/bin/bash
+printf '%s\0' "$@" >>"$OMARCHY_TEST_STUB_LOG"
+if [[ $1 == "--check" ]]; then
+  [[ ${OMARCHY_TEST_AGENT_INSTALLED:-false} == "true" ]]
+else
+  OMARCHY_TEST_AGENT_INSTALLED=true
+fi
+SH
+chmod +x "$mock_bin/omarchy-install-phantombot"
+
+: >"$agent_open_log"
+OMARCHY_TEST_AGENT_INSTALLED=true omarchy-default-agent phantombot
+[[ $(omarchy-default-agent) == "phantombot" ]] || fail "choosing Phantombot records it as the default agent"
+mapfile -d '' -t agent_open_args <"$agent_open_log"
+[[ ${agent_open_args[*]} == "omarchy-agent" ]] || fail "choosing Phantombot opens the agent"
+[[ ! -s $mise_history ]] || fail "Phantombot never installs through mise"
+pass "choosing Phantombot routes through its own installer and opens the agent"
+
+: >"$terminal_log"
+OMARCHY_TEST_AGENT_INSTALLED=false omarchy-default-agent phantombot >/dev/null
+mapfile -d '' -t terminal_args <"$terminal_log"
+[[ ${terminal_args[*]} == "omarchy-default-agent --install phantombot" ]] ||
+  fail "a missing Phantombot routes through the install terminal" "argv: ${terminal_args[*]}"
+[[ $(omarchy-default-agent) == "phantombot" ]] ||
+  fail "a missing Phantombot still records the selection"
+pass "a missing Phantombot routes through the install terminal"
+
+: >"$stub_log"
+: >"$terminal_log"
+: >"$agent_open_log"
+omarchy-default-agent --install phantombot >/dev/null
+tr '\0' '\n' <"$stub_log" | grep -Fx -- '--now' >/dev/null ||
+  fail "installing Phantombot runs its installer"
+mapfile -d '' -t agent_open_args <"$agent_open_log"
+[[ ${agent_open_args[*]} == "omarchy-agent --inline" ]] || fail "installing Phantombot opens the agent after install"
+[[ ! -s $terminal_log ]] || fail "installing Phantombot skips the floating terminal"
+pass "installing Phantombot runs its --now installer and opens the agent"
+
+# Back to the real launcher: the omarchy-agent mock above exists only for the
+# selection flow.
+rm "$mock_bin/omarchy-agent"
+hash -r
+printf '%s\n' "phantombot" >"$agent_file"
+: >"$launch_log"
+omarchy-agent
+mapfile -d '' -t launch_args <"$launch_log"
+[[ ${launch_args[*]} == "--app-id=org.omarchy.agent phantombot persona" ]] ||
+  fail "Phantombot launches its chat TUI" "argv: ${launch_args[*]}"
+omarchy-agent-prompt "Review this project"
+mapfile -d '' -t launch_args <"$launch_log"
+[[ ${#launch_args[@]} == 6 &&
+  ${launch_args[0]} == "--app-id=org.omarchy.agent" &&
+  ${launch_args[1]} == "bash" &&
+  ${launch_args[2]} == "-c" &&
+  ${launch_args[5]} == "Review this project" ]] ||
+  fail "Phantombot receives prompts through its headless ask route" "argv: ${launch_args[*]}"
+pass "Phantombot launches its TUI and seeds prompts through ask"

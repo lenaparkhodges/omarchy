@@ -115,6 +115,16 @@ muse)
   command=(muse --approval-mode never)
   [[ -n ${prompt:-} ]] && command+=(-- "$prompt")
   ;;
+phantombot)
+  # Phantombot's chat TUI has no seed-prompt flag, so a prompt runs as one
+  # headless turn first and the TUI opens on top of it; a bare launch goes
+  # straight to the TUI. It has no permission prompts of its own to skip.
+  if [[ -n ${prompt:-} ]]; then
+    command=(bash -c 'phantombot ask --history --conversation omarchy "$1"; echo; exec phantombot persona' _ "$prompt")
+  else
+    command=(phantombot persona)
+  fi
+  ;;
 omp)
   command=(omp --auto-approve)
   [[ -n ${prompt:-} ]] && command+=(-- "$prompt")
